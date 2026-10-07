@@ -13,6 +13,7 @@
 #include <net/dst.h>
 #include <net/ip.h>
 #include <net/xfrm.h>
+#include <linux/mutex.h>
 
 static struct kmem_cache *secpath_cachep __read_mostly;
 
@@ -101,6 +102,81 @@ int xfrm_prepare_input(struct xfrm_state *x, struct sk_buff *skb)
 	return inner_mode->input2(x, skb);
 }
 EXPORT_SYMBOL(xfrm_prepare_input);
+
+/* Post-decryption VTI notification for IPv4 outer tunnel SAs. */
+static struct xfrm_tunnel __rcu *rcv_notify_handlers __read_mostly;
+static DEFINE_MUTEX(xfrm4_mode_tunnel_input_mutex);
+
+int xfrm4_mode_tunnel_input_register(struct xfrm_tunnel *handler)
+{
+	struct xfrm_tunnel __rcu **pprev;
+	struct xfrm_tunnel *t;
+	int ret = -EEXIST;
+	int priority = handler->priority;
+
+	mutex_lock(&xfrm4_mode_tunnel_input_mutex);
+
+	for (pprev = &rcv_notify_handlers;
+	     (t = rcu_dereference_protected(*pprev,
+	     lockdep_is_held(&xfrm4_mode_tunnel_input_mutex))) != NULL;
+	     pprev = &t->next) {
+		if (t->priority > priority)
+			break;
+		if (t->priority == priority)
+			goto err;
+
+	}
+
+	handler->next = *pprev;
+	rcu_assign_pointer(*pprev, handler);
+
+	ret = 0;
+
+err:
+	mutex_unlock(&xfrm4_mode_tunnel_input_mutex);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(xfrm4_mode_tunnel_input_register);
+
+int xfrm4_mode_tunnel_input_deregister(struct xfrm_tunnel *handler)
+{
+	struct xfrm_tunnel __rcu **pprev;
+	struct xfrm_tunnel *t;
+	int ret = -ENOENT;
+
+	mutex_lock(&xfrm4_mode_tunnel_input_mutex);
+	for (pprev = &rcv_notify_handlers;
+	     (t = rcu_dereference_protected(*pprev,
+	     lockdep_is_held(&xfrm4_mode_tunnel_input_mutex))) != NULL;
+	     pprev = &t->next) {
+		if (t == handler) {
+			*pprev = handler->next;
+			ret = 0;
+			break;
+		}
+	}
+	mutex_unlock(&xfrm4_mode_tunnel_input_mutex);
+	synchronize_net();
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(xfrm4_mode_tunnel_input_deregister);
+
+static int xfrm4_tunnel_notify(struct sk_buff *skb)
+{
+	struct xfrm_tunnel *handler;
+	int ret = 0;
+
+	rcu_read_lock();
+	for (handler = rcu_dereference(rcv_notify_handlers); handler;
+	     handler = rcu_dereference(handler->next)) {
+		ret = handler->handler(skb);
+		if (ret)
+			break;
+	}
+	rcu_read_unlock();
+	return ret;
+}
 
 int xfrm_input(struct sk_buff *skb, int nexthdr, __be32 spi, int encap_type)
 {
@@ -240,6 +316,11 @@ resume:
 		}
 
 		if (x->outer_mode->flags & XFRM_MODE_FLAG_TUNNEL) {
+			/* Both IPv4 and IPv6 inner headers are now validated and exposed.
+			 * Negative notification rejects a matching VTI policy failure.
+			 */
+			if (x->props.family == AF_INET && xfrm4_tunnel_notify(skb) < 0)
+				goto drop;
 			decaps = 1;
 			break;
 		}

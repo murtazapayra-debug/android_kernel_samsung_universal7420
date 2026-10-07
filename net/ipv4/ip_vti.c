@@ -37,6 +37,7 @@
 
 #include <net/sock.h>
 #include <net/ip.h>
+#include <net/ipv6.h>
 #include <net/icmp.h>
 #include <net/ip_tunnels.h>
 #include <net/inet_ecn.h>
@@ -276,40 +277,52 @@ out:
 	return err;
 }
 
-/* We dont digest the packet therefore let the packet pass */
+/* Called after authenticated tunnel decapsulation for either inner family.
+ * The outer addresses must come from the validated SA: ip_hdr() is now inner.
+ */
 static int vti_rcv(struct sk_buff *skb)
 {
+	struct xfrm_state *x = xfrm_input_state(skb);
 	struct ip_tunnel *tunnel;
-	const struct iphdr *iph = ip_hdr(skb);
+	struct pcpu_tstats *tstats;
+	u32 oldmark;
+	int family, ret;
 
-	tunnel = vti_tunnel_lookup(dev_net(skb->dev), iph->saddr, iph->daddr);
-	if (tunnel != NULL) {
-		struct pcpu_tstats *tstats;
-		u32 oldmark = skb->mark;
-		int ret;
+	if (!x || x->props.family != AF_INET || x->props.mode != XFRM_MODE_TUNNEL)
+		return 0;
+	tunnel = vti_tunnel_lookup(dev_net(skb->dev), x->props.saddr.a4, x->id.daddr.a4);
+	if (!tunnel)
+		return 0;
+	if (skb->protocol == htons(ETH_P_IP))
+		family = AF_INET;
+	else if (skb->protocol == htons(ETH_P_IPV6))
+		family = AF_INET6;
+	else
+		return -EPROTONOSUPPORT;
 
-
-		/* temporarily mark the skb with the tunnel o_key, to
-		 * only match policies with this mark.
-		 */
-		skb->mark = be32_to_cpu(tunnel->parms.o_key);
-		ret = xfrm4_policy_check(NULL, XFRM_POLICY_IN, skb);
-		skb->mark = oldmark;
-		if (!ret)
-			return -1;
-
-		tstats = this_cpu_ptr(tunnel->dev->tstats);
-		u64_stats_update_begin(&tstats->syncp);
-		tstats->rx_packets++;
-		tstats->rx_bytes += skb->len;
-		u64_stats_update_end(&tstats->syncp);
-
-		secpath_reset(skb);
-		skb->dev = tunnel->dev;
-		return 1;
+	oldmark = skb->mark;
+	skb->mark = be32_to_cpu(tunnel->parms.i_key);
+	ret = xfrm_policy_check(NULL, XFRM_POLICY_IN, skb, family);
+	skb->mark = oldmark;
+	if (!ret) {
+		tunnel->dev->stats.rx_dropped++;
+		return -EPERM;
 	}
+	tstats = this_cpu_ptr(tunnel->dev->tstats);
+	u64_stats_update_begin(&tstats->syncp);
+	tstats->rx_packets++;
+	tstats->rx_bytes += skb->len;
+	u64_stats_update_end(&tstats->syncp);
+	secpath_reset(skb);
+	skb->dev = tunnel->dev;
+	return 1;
+}
 
-	return -1;
+/* Never permit untransformed output or a transform for another tunnel. */
+static bool vti_state_check(const struct xfrm_state *x, __be32 dst, __be32 src)
+{
+	return x && x->props.mode == XFRM_MODE_TUNNEL && x->props.family == AF_INET &&
+	       (!dst || x->id.daddr.a4 == dst) && (!src || x->props.saddr.a4 == src);
 }
 
 /* This function assumes it is being called from dev_queue_xmit()
@@ -320,67 +333,60 @@ static netdev_tx_t vti_tunnel_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct ip_tunnel *tunnel = netdev_priv(dev);
 	struct pcpu_tstats *tstats;
-	struct iphdr  *tiph = &tunnel->parms.iph;
-	u8     tos;
-	struct rtable *rt;		/* Route to the other host */
-	struct net_device *tdev;	/* Device to other host */
-	struct iphdr  *old_iph = ip_hdr(skb);
-	__be32 dst = tiph->daddr;
-	struct flowi4 fl4;
+	struct dst_entry *dst = skb_dst(skb);
+	struct flowi fl;
+	int family;
 
-	if (skb->protocol != htons(ETH_P_IP))
+	if (skb->protocol == htons(ETH_P_IP))
+		family = AF_INET;
+	else if (skb->protocol == htons(ETH_P_IPV6))
+		family = AF_INET6;
+	else
 		goto tx_error;
-
-	tos = old_iph->tos;
-
-	memset(&fl4, 0, sizeof(fl4));
-	flowi4_init_output(&fl4, tunnel->parms.link,
-			   be32_to_cpu(tunnel->parms.o_key), RT_TOS(tos),
-			   RT_SCOPE_UNIVERSE,
-			   IPPROTO_IPIP, 0,
-			   dst, tiph->saddr, 0, 0, 0);
-	rt = ip_route_output_key(dev_net(dev), &fl4);
-	if (IS_ERR(rt)) {
-		dev->stats.tx_carrier_errors++;
+	if (!dst)
 		goto tx_error_icmp;
-	}
-	/* if there is no transform then this tunnel is not functional.
-	 * Or if the xfrm is not mode tunnel.
+	memset(&fl, 0, sizeof(fl));
+	skb->mark = be32_to_cpu(tunnel->parms.o_key);
+	if (xfrm_decode_session(skb, &fl, family))
+		goto tx_error;
+	/* Decode the inner flow, not an IPIP flow between outer endpoints.
+	 * xfrm_lookup resolves the IPv4 SA and its underlying route for IPv6 too.
 	 */
-	if (!rt->dst.xfrm ||
-	    rt->dst.xfrm->props.mode != XFRM_MODE_TUNNEL) {
-		dev->stats.tx_carrier_errors++;
-		ip_rt_put(rt);
+	dst_hold(dst);
+	dst = xfrm_lookup(dev_net(dev), dst, &fl, NULL, 0);
+	if (IS_ERR(dst))
+		goto tx_error_icmp;
+	if (!vti_state_check(dst->xfrm, tunnel->parms.iph.daddr, tunnel->parms.iph.saddr)) {
+		dst_release(dst);
 		goto tx_error_icmp;
 	}
-	tdev = rt->dst.dev;
-
-	if (tdev == dev) {
-		ip_rt_put(rt);
+	if (dst->dev == dev) {
+		dst_release(dst);
 		dev->stats.collisions++;
 		goto tx_error;
 	}
-
 	if (tunnel->err_count > 0) {
-		if (time_before(jiffies,
-				tunnel->err_time + IPTUNNEL_ERR_TIMEO)) {
+		if (time_before(jiffies, tunnel->err_time + IPTUNNEL_ERR_TIMEO)) {
 			tunnel->err_count--;
 			dst_link_failure(skb);
-		} else
+		} else {
 			tunnel->err_count = 0;
+		}
 	}
-
-	memset(IPCB(skb), 0, sizeof(*IPCB(skb)));
+	if (family == AF_INET)
+		memset(IPCB(skb), 0, sizeof(*IPCB(skb)));
+	else
+		memset(IP6CB(skb), 0, sizeof(*IP6CB(skb)));
 	skb_dst_drop(skb);
-	skb_dst_set(skb, &rt->dst);
+	skb_dst_set(skb, dst);
 	nf_reset(skb);
-	skb->dev = skb_dst(skb)->dev;
-
+	skb->dev = dst->dev;
 	tstats = this_cpu_ptr(dev->tstats);
 	VTI_XMIT(tstats, &dev->stats);
 	return NETDEV_TX_OK;
 
 tx_error_icmp:
+	dev->stats.tx_carrier_errors++;
 	dst_link_failure(skb);
 tx_error:
 	dev->stats.tx_errors++;
