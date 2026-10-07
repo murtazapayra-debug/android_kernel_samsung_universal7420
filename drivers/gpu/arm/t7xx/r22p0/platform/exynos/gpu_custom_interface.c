@@ -662,8 +662,7 @@ static ssize_t set_min_lock_dvfs(struct device *dev, struct device_attribute *at
 	int ret, clock = 0;
 	struct exynos_context *platform = (struct exynos_context *)pkbdev->platform_context;
 	
-	// Kill it from now without interferring Game Launcher
-	return count;
+	/* Honor the validated minimum lock; DVFS and thermal maximums stay active. */
 
 	if (!platform)
 		return -ENODEV;
