@@ -56,6 +56,10 @@ static inline int sysmon_send_shutdown(enum subsys_id dest_ss)
 {
 	return 0;
 }
+static inline int sysmon_send_diag_disable_noti(enum subsys_id dest_ss)
+{
+	return 0;
+}
 #endif
 
 #endif
