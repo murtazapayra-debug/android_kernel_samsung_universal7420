@@ -75,7 +75,12 @@ enum bpf_cmd {
 	BPF_OBJ_GET,
 	BPF_PROG_ATTACH,
 	BPF_PROG_DETACH,
-	BPF_OBJ_GET_INFO_BY_FD = BPF_PROG_DETACH + 6,
+	/* Command 10 (PROG_TEST_RUN) is not implemented in this backport. */
+	BPF_PROG_GET_NEXT_ID = 11,
+	BPF_MAP_GET_NEXT_ID,
+	BPF_PROG_GET_FD_BY_ID,
+	BPF_MAP_GET_FD_BY_ID,
+	BPF_OBJ_GET_INFO_BY_FD,
 };
 
 enum bpf_map_type {
@@ -206,6 +211,15 @@ union bpf_attr {
 		__u32		attach_bpf_fd;	/* eBPF program to attach */
 		__u32		attach_type;
 		__u32		attach_flags;
+	};
+	struct { /* anonymous struct used by BPF_*_GET_*_ID commands */
+		union {
+			__u32 start_id;
+			__u32 prog_id;
+			__u32 map_id;
+		};
+		__u32 next_id;
+		__u32 open_flags;
 	};
 	struct { /* anonymous struct used by BPF_OBJ_GET_INFO_BY_FD */
 		__u32		bpf_fd;

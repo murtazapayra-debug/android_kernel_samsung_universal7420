@@ -36,6 +36,7 @@ struct bpf_map_ops {
 
 struct bpf_map {
 	atomic_t refcnt;
+	u32 id;
 	enum bpf_map_type map_type;
 	u32 key_size;
 	u32 value_size;
@@ -177,6 +178,7 @@ struct bpf_prog_type_list {
 
 struct bpf_prog_aux {
 	atomic_t refcnt;
+	u32 id;
 	u32 used_map_cnt;
 	u32 max_ctx_offset;
 	const struct bpf_verifier_ops *ops;
