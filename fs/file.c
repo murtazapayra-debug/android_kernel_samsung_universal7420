@@ -18,6 +18,8 @@
 #include <linux/file.h>
 #include <linux/fdtable.h>
 #include <linux/bitops.h>
+#include <linux/bitmap.h>
+#include <linux/close_range.h>
 #include <linux/interrupt.h>
 #include <linux/spinlock.h>
 #include <linux/rcupdate.h>
@@ -625,6 +627,84 @@ int __close_fd(struct files_struct *files, unsigned fd)
 out_unlock:
 	spin_unlock(&files->file_lock);
 	return -EBADF;
+}
+
+/*
+ * close_range() backport, semantics as upstream fs/file.c (Linux 5.11).
+ * Android 16 bionic's posix_spawn(POSIX_SPAWN_CLOEXEC_DEFAULT) calls
+ * close_range(3, ~0U, CLOSE_RANGE_CLOEXEC) in the child and exits 127 when it
+ * fails, so without it clatd and the tethering DNS server never start.
+ */
+static void __range_cloexec(struct files_struct *files,
+			    unsigned int fd, unsigned int max_fd)
+{
+	struct fdtable *fdt;
+
+	spin_lock(&files->file_lock);
+	fdt = files_fdtable(files);
+	max_fd = min(max_fd, fdt->max_fds - 1);
+	if (fd <= max_fd)
+		bitmap_set(fdt->close_on_exec, fd, max_fd - fd + 1);
+	spin_unlock(&files->file_lock);
+}
+
+static void __range_close(struct files_struct *files,
+			  unsigned int fd, unsigned int max_fd)
+{
+	struct fdtable *fdt;
+	struct file *file;
+
+	spin_lock(&files->file_lock);
+	/* max_fds never exceeds sysctl_nr_open, so fd cannot wrap. */
+	for (; fd <= max_fd; fd++) {
+		fdt = files_fdtable(files);
+		if (fd >= fdt->max_fds)
+			break;
+		file = fdt->fd[fd];
+		if (file) {
+			rcu_assign_pointer(fdt->fd[fd], NULL);
+			__clear_close_on_exec(fd, fdt);
+			__put_unused_fd(files, fd);
+			spin_unlock(&files->file_lock);
+			filp_close(file, files);
+			cond_resched();
+			spin_lock(&files->file_lock);
+		} else if (need_resched()) {
+			spin_unlock(&files->file_lock);
+			cond_resched();
+			spin_lock(&files->file_lock);
+		}
+	}
+	spin_unlock(&files->file_lock);
+}
+
+int __close_range(unsigned int fd, unsigned int max_fd, unsigned int flags)
+{
+	struct files_struct *files = current->files, *copy = NULL;
+
+	if (flags & ~(CLOSE_RANGE_UNSHARE | CLOSE_RANGE_CLOEXEC))
+		return -EINVAL;
+	if (fd > max_fd)
+		return -EINVAL;
+
+	if ((flags & CLOSE_RANGE_UNSHARE) && atomic_read(&files->count) > 1) {
+		int err;
+
+		copy = dup_fd(files, &err);
+		if (!copy)
+			return err;
+		files = copy;
+	}
+
+	if (flags & CLOSE_RANGE_CLOEXEC)
+		__range_cloexec(files, fd, max_fd);
+	else
+		__range_close(files, fd, max_fd);
+
+	/* Install the private table and drop our reference to the shared one. */
+	if (copy)
+		reset_files_struct(copy);
+	return 0;
 }
 
 void do_close_on_exec(struct files_struct *files)

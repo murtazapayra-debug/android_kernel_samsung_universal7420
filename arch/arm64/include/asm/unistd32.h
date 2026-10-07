@@ -801,8 +801,61 @@ __SYSCALL(387, sys_ni_syscall)
 __SYSCALL(388, sys_ni_syscall)
 //#define __NR_membarrier 389
 __SYSCALL(389, sys_ni_syscall)
+/*
+ * compat_sys_call_table (sys32.S) is a plain .quad list indexed by syscall
+ * number, so every slot up to __NR_compat_syscalls must be listed here.
+ * 390..433 are not implemented on this kernel.
+ */
+__SYSCALL(390, sys_ni_syscall)
+__SYSCALL(391, sys_ni_syscall)
+__SYSCALL(392, sys_ni_syscall)
+__SYSCALL(393, sys_ni_syscall)
+__SYSCALL(394, sys_ni_syscall)
+__SYSCALL(395, sys_ni_syscall)
+__SYSCALL(396, sys_ni_syscall)
+__SYSCALL(397, sys_ni_syscall)
+__SYSCALL(398, sys_ni_syscall)
+__SYSCALL(399, sys_ni_syscall)
+__SYSCALL(400, sys_ni_syscall)
+__SYSCALL(401, sys_ni_syscall)
+__SYSCALL(402, sys_ni_syscall)
+__SYSCALL(403, sys_ni_syscall)
+__SYSCALL(404, sys_ni_syscall)
+__SYSCALL(405, sys_ni_syscall)
+__SYSCALL(406, sys_ni_syscall)
+__SYSCALL(407, sys_ni_syscall)
+__SYSCALL(408, sys_ni_syscall)
+__SYSCALL(409, sys_ni_syscall)
+__SYSCALL(410, sys_ni_syscall)
+__SYSCALL(411, sys_ni_syscall)
+__SYSCALL(412, sys_ni_syscall)
+__SYSCALL(413, sys_ni_syscall)
+__SYSCALL(414, sys_ni_syscall)
+__SYSCALL(415, sys_ni_syscall)
+__SYSCALL(416, sys_ni_syscall)
+__SYSCALL(417, sys_ni_syscall)
+__SYSCALL(418, sys_ni_syscall)
+__SYSCALL(419, sys_ni_syscall)
+__SYSCALL(420, sys_ni_syscall)
+__SYSCALL(421, sys_ni_syscall)
+__SYSCALL(422, sys_ni_syscall)
+__SYSCALL(423, sys_ni_syscall)
+__SYSCALL(424, sys_ni_syscall)
+__SYSCALL(425, sys_ni_syscall)
+__SYSCALL(426, sys_ni_syscall)
+__SYSCALL(427, sys_ni_syscall)
+__SYSCALL(428, sys_ni_syscall)
+__SYSCALL(429, sys_ni_syscall)
+__SYSCALL(430, sys_ni_syscall)
+__SYSCALL(431, sys_ni_syscall)
+__SYSCALL(432, sys_ni_syscall)
+__SYSCALL(433, sys_ni_syscall)
 #define __NR_pidfd_open 434
 __SYSCALL(__NR_pidfd_open, sys_pidfd_open)
+//#define __NR_clone3 435
+__SYSCALL(435, sys_ni_syscall)
+#define __NR_close_range 436
+__SYSCALL(__NR_close_range, sys_close_range)
 
 /*
  * Please add new compat syscalls above this comment and update
