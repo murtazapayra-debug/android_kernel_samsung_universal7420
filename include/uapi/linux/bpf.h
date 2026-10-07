@@ -205,6 +205,10 @@ union bpf_attr {
 		__u32		log_size;	/* size of user buffer */
 		__aligned_u64	log_buf;	/* user supplied buffer */
 		__u32		kern_version;	/* checked when prog_type=kprobe */
+		__u32		prog_flags;	/* unsupported: must be zero */
+		char		prog_name[16];	/* unsupported: must be zero */
+		__u32		prog_ifindex;	/* no hardware offload */
+		__u32		expected_attach_type;
 	};
 
 	struct { /* anonymous struct used by BPF_OBJ_* commands */
