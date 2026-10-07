@@ -563,6 +563,8 @@ static struct xfrm_state *xfrm_state_construct(struct net *net,
 	}
 
 	xfrm_mark_get(attrs, &x->mark);
+	if (attrs[XFRMA_OUTPUT_MARK])
+		x->props.output_mark = nla_get_u32(attrs[XFRMA_OUTPUT_MARK]);
 
 	err = __xfrm_init_state(x, false);
 	if (err)
@@ -788,6 +790,12 @@ static int copy_to_user_state_extra(struct xfrm_state *x,
 	int ret = 0;
 
 	copy_to_user_state(x, p);
+
+	if (x->props.output_mark) {
+		ret = nla_put_u32(skb, XFRMA_OUTPUT_MARK, x->props.output_mark);
+		if (ret)
+			goto out;
+	}
 
 	if (x->props.extra_flags) {
 		ret = nla_put_u32(skb, XFRMA_SA_EXTRA_FLAGS,
@@ -2339,6 +2347,7 @@ static const struct nla_policy xfrma_policy[XFRMA_MAX+1] = {
 	[XFRMA_TFCPAD]		= { .type = NLA_U32 },
 	[XFRMA_REPLAY_ESN_VAL]	= { .len = sizeof(struct xfrm_replay_state_esn) },
 	[XFRMA_SA_EXTRA_FLAGS]	= { .type = NLA_U32 },
+	[XFRMA_OUTPUT_MARK]	= { .type = NLA_U32 },
 };
 
 static const struct xfrm_link {
@@ -2534,6 +2543,8 @@ static inline size_t xfrm_sa_len(struct xfrm_state *x)
 		l += nla_total_size(sizeof(*x->coaddr));
 	if (x->props.extra_flags)
 		l += nla_total_size(sizeof(x->props.extra_flags));
+	if (x->props.output_mark)
+		l += nla_total_size(sizeof(x->props.output_mark));
 
 	/* Must count x->lastused as it may become non-zero behind our back. */
 	l += nla_total_size(sizeof(u64));

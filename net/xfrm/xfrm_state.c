@@ -1330,6 +1330,10 @@ out:
 		}
 		if (!use_spi && memcmp(&x1->sel, &x->sel, sizeof(x1->sel)))
 			memcpy(&x1->sel, &x->sel, sizeof(x1->sel));
+		if (x1->props.output_mark != x->props.output_mark) {
+			x1->props.output_mark = x->props.output_mark;
+			x1->genid++;
+		}
 		memcpy(&x1->lft, &x->lft, sizeof(x1->lft));
 		x1->km.dying = 0;
 
