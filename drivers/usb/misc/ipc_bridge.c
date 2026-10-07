@@ -383,7 +383,7 @@ ipc_bridge_write(struct platform_device *pdev, char *buf, unsigned int count)
 		if (busy_cnt > 1 && ret == -16) {
 			dev_err(&dev->intf->dev, "use_count %d, pm_usage_cnt %d, rpm_status %d\n",
 				atomic_read(&dev->writeurb->use_count),
-				atomic_read(&dev->intf->pm_usage_cnt),
+				atomic_read(&dev->intf->dev.power.usage_count),
 				dev->inturb->dev->dev.power.runtime_status);
 		}
 		goto done;

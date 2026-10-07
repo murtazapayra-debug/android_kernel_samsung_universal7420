@@ -133,8 +133,8 @@ static int get_serial_info(struct usb_serial_port *port,
 		return -EFAULT;
 
 	memset(&tmp, 0, sizeof(tmp));
-	tmp.line            = port->serial->minor;
-	tmp.port            = port->number;
+	tmp.line            = port->minor;
+	tmp.port            = port->port_number;
 	tmp.baud_base       = tty_get_baud_rate(port->port.tty);
 	tmp.close_delay	    = port->port.close_delay / 10;
 	tmp.closing_wait    =
@@ -337,7 +337,7 @@ static int csvt_ctrl_open(struct tty_struct *tty,
 {
 	int	retval;
 
-	dev_dbg(&port->dev, "%s port %d", __func__, port->number);
+	dev_dbg(&port->dev, "%s port %d", __func__, port->port_number);
 
 	retval = usb_submit_urb(port->interrupt_in_urb, GFP_KERNEL);
 	if (retval) {
@@ -354,7 +354,7 @@ static int csvt_ctrl_open(struct tty_struct *tty,
 
 static void csvt_ctrl_close(struct usb_serial_port *port)
 {
-	dev_dbg(&port->dev, "%s port %d", __func__, port->number);
+	dev_dbg(&port->dev, "%s port %d", __func__, port->port_number);
 
 	usb_serial_generic_close(port);
 	usb_kill_urb(port->interrupt_in_urb);

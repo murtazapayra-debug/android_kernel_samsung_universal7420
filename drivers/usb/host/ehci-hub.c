@@ -393,7 +393,7 @@ static int ehci_bus_resume (struct usb_hcd *hcd)
 #ifdef CONFIG_MDM_HSIC_PM
 	ehci_writel(ehci, ehci->command | CMD_LRESET, &ehci->regs->command);
 
-	retval = handshake(ehci, &ehci->regs->command,
+	retval = ehci_handshake(ehci, &ehci->regs->command,
 		   CMD_LRESET, 0, 100000 /* 100msec */);
 	ehci_dbg(ehci, "LRESET %d\n", retval);
 #endif

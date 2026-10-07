@@ -66,6 +66,8 @@ dtb-$(CONFIG_BOARD_ZEROFLTE_UNI) += exynos7420-zeroflte_uni_open_06.dtb \
 dtb-$(CONFIG_BOARD_ZEROLTE_UNI) += exynos7420-zerolte_uni_open_06.dtb \
  exynos7420-zerolte_uni_open_07.dtb \
  exynos7420-zerolte_uni_open_08.dtb
+dtb-$(CONFIG_BOARD_NOBLELTESPR) += exynos7420-noblelte_usa_cdma_00.dtb \
+ exynos7420-noblelte_usa_cdma_09.dtb
 dtb-$(CONFIG_BOARD_NOBLELTE_UNI) +=  exynos7420-noblelte_uni_open_09.dtb
 dtb-$(CONFIG_BOARD_ZENLTE_UNI) +=  exynos7420-zenlte_uni_open_09.dtb
 
