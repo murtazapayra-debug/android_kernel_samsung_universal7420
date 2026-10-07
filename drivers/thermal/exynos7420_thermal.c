@@ -660,6 +660,7 @@ static struct thermal_zone_device_ops exynos_dev_ops = {
  */
 static void exynos_report_trigger(void)
 {
+	static unsigned int last_reported_level = UINT_MAX;
 	unsigned int i;
 	char data[10];
 	char *envp[] = { data, NULL };
@@ -695,6 +696,14 @@ static void exynos_report_trigger(void)
 	}
 
 	mutex_unlock(&th_zone->therm_dev->lock);
+
+	/*
+	 * Report trip level changes only: above the first trip this runs on every polling
+	 * interval, and repeating an unchanged level only kept ueventd busy.
+	 */
+	if (i == last_reported_level)
+		return;
+	last_reported_level = i;
 
 	snprintf(data, sizeof(data), "%u", i);
 	kobject_uevent_env(&th_zone->therm_dev->device.kobj, KOBJ_CHANGE, envp);
