@@ -184,12 +184,23 @@ bpf_lookup(struct inode *dir, struct dentry *dentry, unsigned flags)
 	return simple_lookup(dir, dentry, flags);
 }
 
+static int bpf_rename2(struct inode *old_dir, struct dentry *old_dentry,
+		       struct inode *new_dir, struct dentry *new_dentry,
+		       unsigned int flags)
+{
+	/* VFS checks NOREPLACE under the directory locks before calling us. */
+	if (flags & ~RENAME_NOREPLACE)
+		return -EINVAL;
+	return simple_rename(old_dir, old_dentry, new_dir, new_dentry);
+}
+
 static const struct inode_operations bpf_dir_iops = {
 	.lookup		= bpf_lookup,
 	.mknod		= bpf_mkobj,
 	.mkdir		= bpf_mkdir,
 	.rmdir		= simple_rmdir,
 	.rename		= simple_rename,
+	.rename2	= bpf_rename2,
 	.link		= simple_link,
 	.unlink		= simple_unlink,
 };
