@@ -93,6 +93,8 @@ enum bpf_map_type {
 	BPF_MAP_TYPE_PERCPU_ARRAY,
 	BPF_MAP_TYPE_STACK_TRACE,
 	BPF_MAP_TYPE_CGROUP_ARRAY,
+	/* 9 and 10 are reserved for the not-yet-ported LRU map types. */
+	BPF_MAP_TYPE_LPM_TRIE = 11,
 };
 
 enum bpf_prog_type {
@@ -169,6 +171,11 @@ enum bpf_attach_type {
 /* Flags for accessing BPF object */
 #define BPF_F_RDONLY		(1U << 3)
 #define BPF_F_WRONLY		(1U << 4)
+
+struct bpf_lpm_trie_key {
+	__u32 prefixlen;
+	__u8 data[0];
+};
 
 union bpf_attr {
 	struct { /* anonymous struct used by BPF_MAP_CREATE command */
