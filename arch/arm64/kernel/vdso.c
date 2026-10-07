@@ -211,7 +211,13 @@ struct vm_area_struct *get_gate_vma(struct mm_struct *mm)
 void update_vsyscall(struct timekeeper *tk)
 {
 	struct timespec xtime_coarse;
-	u32 use_syscall = strcmp(tk->clock->name, "arch_sys_counter");
+	/*
+	 * The EL0 virtual counter the vDSO reads is not consistent across CPUs on this device
+	 * (pinned to cpu0-3 it ran minutes ahead of the kernel's clocksource, each core by a
+	 * different amount), so the counter-based clocks always use the syscall. The coarse
+	 * clocks do not read the counter and stay in the vDSO.
+	 */
+	u32 use_syscall = 1;
 
 	++vdso_data->tb_seq_count;
 	smp_wmb();
