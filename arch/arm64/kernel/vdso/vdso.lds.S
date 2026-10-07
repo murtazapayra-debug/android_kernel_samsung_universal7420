@@ -59,7 +59,18 @@ SECTIONS
 
 	.dynamic	: { *(.dynamic) }		:text	:dynamic
 
-	.rodata		: { *(.rodata*) }		:text
+	/*
+	 * binutils emits .got/.got.plt for the vDSO. Left as orphans they were placed after the
+	 * page alignment below, at _vdso_data, which made vdso.so two pages: the kernel then
+	 * mapped the data page one page after the address the code reads, and the coarse
+	 * clocks returned the tail of vdso.so as time. Keep them in the text segment.
+	 */
+	.rodata		: {
+		*(.rodata*)
+		*(.got)
+		*(.got.plt)
+		*(.plt)
+	}						:text
 
 	_end = .;
 	PROVIDE(end = .);
