@@ -43,32 +43,33 @@ jobs:
         run: |
           git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 -b android-10.0.0_r47 --depth=1 $GITHUB_WORKSPACE/toolchain-arm64
 
-      - name: Setup BakaSU and Header Compatibility Shim
-        run: |
-          if [ ! -d "drivers/kernelsu" ]; then
-            curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh" | bash -s main
-          fi
+      -- name: Setup KernelSU / LSM compatibility
+      run: |
+        if [ ! -d "drivers/kernelsu" ]; then
+          curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh" | bash -s main
+        fi
 
-          mkdir -p include/linux
-          printf '%s\n' \
-            '#ifndef _LINUX_LSM_HOOKS_H' \
-            '#define _LINUX_LSM_HOOKS_H' \
-            '#include <linux/security.h>' \
-            '#include <linux/version.h>' \
-            '#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 2, 0)' \
-            'struct security_hook_list {' \
-            '    struct list_head list;' \
-            '    struct list_head *head;' \
-            '    union { void *hook; } hook;' \
-            '    char *lsm;' \
-            '};' \
-            '#ifndef LSM_HOOK_INIT' \
-            '#define LSM_HOOK_INIT(HEAD, HOOK) { .hook = { .hook = HOOK } }' \
-            '#endif' \
-            'static inline void security_add_hooks(struct security_hook_list *hooks, int count, char *lsm) {}' \
-            '#endif' \
-            '#endif' > include/linux/lsm_hooks.h
-
+        mkdir -p include/linux
+        printf '%s\n' \
+          '#ifndef _LINUX_LSM_HOOKS_H' \
+          '#define _LINUX_LSM_HOOKS_H' \
+          '#include <linux/security.h>' \
+          '#include <linux/version.h>' \
+          '#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 2, 0)' \
+          'struct security_hook_list {' \
+          '    struct list_head list;' \
+          '    struct list_head *head;' \
+          '    union { void *hook; } hook;' \
+          '    char *lsm;' \
+          '};' \
+          '#ifndef LSM_HOOK_INIT' \
+          '#define LSM_HOOK_INIT(HEAD, HOOK) { .hook = { .hook = (void *)(HOOK) } }' \
+          '#endif' \
+          'static inline void security_add_hooks(struct security_hook_list *hooks, ...) { (void)hooks; }' \
+          'static inline void security_delete_hooks(struct security_hook_list *hooks, ...) { (void)hooks; }' \
+          '#endif' \
+          '#endif' > include/linux/lsm_hooks.h
+          
       - name: Configure and Compile Kernel
         env:
           ARCH: arm64
