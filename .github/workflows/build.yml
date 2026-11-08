@@ -58,12 +58,13 @@ jobs:
         run: |
           make clean && make mrproper
           
-          # Generate configuration
+          # Generate base configuration
           make $DEFCONFIG
           
           # Enforce BakaSU and disable Knox/TIMA/DEFEX
           scripts/config --enable CONFIG_KSU
           scripts/config --enable CONFIG_KSU_MANUAL_HOOK
+          scripts/config --disable CONFIG_KSU_DEBUG
           scripts/config --enable CONFIG_OVERLAY_FS
           scripts/config --disable CONFIG_SECURITY_DEFEX
           scripts/config --disable CONFIG_TIMA
@@ -72,6 +73,9 @@ jobs:
           scripts/config --disable CONFIG_KNOX_KAP
           scripts/config --disable CONFIG_SECURITY_SELINUX_POLICYAUTH
           scripts/config --disable CONFIG_DM_VERITY
+          
+          # Non-interactively apply defaults for newly added BakaSU symbols
+          make olddefconfig || (yes "" | make oldconfig)
           
           # Build kernel image and device trees
           make -j$(nproc)
