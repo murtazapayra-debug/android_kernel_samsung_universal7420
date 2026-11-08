@@ -49,6 +49,7 @@ jobs:
             curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh" | bash -s main
           fi
 
+          # 1. Create LSM headers shim for 3.10
           mkdir -p include/linux
           printf '%s\n' \
             '#ifndef _LINUX_LSM_HOOKS_H' \
@@ -70,6 +71,19 @@ jobs:
             '#endif' \
             '#endif' > include/linux/lsm_hooks.h
 
+          # 2. Export ksu_handle_prctl from BakaSU core_hook.c
+          sed -i 's/static int ksu_handle_prctl/int ksu_handle_prctl/g' drivers/kernelsu/core_hook.c 2>/dev/null || true
+
+          # 3. Provide weak bridge functions in security/security.c for legacy 3.10 hooks
+          cat << 'EOF' >> security/security.c
+
+          #ifdef CONFIG_KSU
+          int __attribute__((weak)) ksu_handle_rename(void *old_dir, ...) { return 0; }
+          int __attribute__((weak)) ksu_inode_permission(void *inode, int mask) { return 0; }
+          int __attribute__((weak)) ksu_handle_setuid(void *new, ...) { return 0; }
+          int __attribute__((weak)) ksu_key_permission(void *key_ref, ...) { return 0; }
+          #endif
+          EOF
       - name: Configure and Compile Kernel
         env:
           ARCH: arm64
