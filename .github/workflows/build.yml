@@ -61,7 +61,7 @@ jobs:
           # Generate base configuration
           make $DEFCONFIG
           
-          # Enforce BakaSU and disable Knox/TIMA/DEFEX
+          # Enforce BakaSU and disable Knox/TIMA/DEFEX/Booster
           scripts/config --enable CONFIG_KSU
           scripts/config --enable CONFIG_KSU_MANUAL_HOOK
           scripts/config --disable CONFIG_KSU_DEBUG
@@ -73,8 +73,12 @@ jobs:
           scripts/config --disable CONFIG_KNOX_KAP
           scripts/config --disable CONFIG_SECURITY_SELINUX_POLICYAUTH
           scripts/config --disable CONFIG_DM_VERITY
+          scripts/config --disable CONFIG_SEC_OS_BOOSTER
+
+          # Bypass missing secos_booster module
+          sed -i 's/.*sec-os-booster.*/# disabled/g' drivers/gud/gud-exynos7420/Makefile 2>/dev/null || true
           
-          # Non-interactively apply defaults for newly added BakaSU symbols
+          # Non-interactively apply defaults
           make olddefconfig || (yes "" | make oldconfig)
           
           # Build kernel image and device trees
@@ -89,23 +93,19 @@ jobs:
       - name: Package with AnyKernel3
         run: |
           git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 anykernel
-          cd anykernel
           
-          # Configure AnyKernel3 script for Note 5 / noblelte
-          sed -i 's/device.name1=.*/device.name1=noblelte/g' anykernel.sh
-          sed -i 's/device.name2=.*/device.name2=noblelteeur/g' anykernel.sh
-          sed -i 's/device.name3=.*/device.name3=universal7420/g' anykernel.sh
-          sed -i 's/block=.*/block=\/dev\/block\/platform\/15570000.ufs\/by-name\/BOOT/g' anykernel.sh
-          sed -i 's/is_slot_device=1/is_slot_device=0/g' anykernel.sh
+          sed -i 's/device.name1=.*/device.name1=noblelte/g' anykernel/anykernel.sh
+          sed -i 's/device.name2=.*/device.name2=noblelteeur/g' anykernel/anykernel.sh
+          sed -i 's/device.name3=.*/device.name3=universal7420/g' anykernel/anykernel.sh
+          sed -i 's/block=.*/block=\/dev\/block\/platform\/15570000.ufs\/by-name\/BOOT/g' anykernel/anykernel.sh
+          sed -i 's/is_slot_device=1/is_slot_device=0/g' anykernel/anykernel.sh
 
-          cd ..
-          # Find and append compiled device tree blob (DTB) to Image
           DTB_FILE=$(find arch/arm64/boot/dts/ -name "*noblelte*.dtb" 2>/dev/null | head -n 1)
           if [ -n "$DTB_FILE" ] && [ -f "$DTB_FILE" ]; then
             echo "Appending DTB: $DTB_FILE"
             cat arch/arm64/boot/Image "$DTB_FILE" > anykernel/Image
           else
-            echo "No matching DTB found to append; using standalone Image"
+            echo "Using standalone Image"
             cp arch/arm64/boot/Image anykernel/Image
           fi
           
