@@ -49,32 +49,25 @@ jobs:
             curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh" | bash -s main
           fi
 
-          # Create lsm_hooks.h compatibility shim for Linux < 4.2
-          if [ ! -f "include/linux/lsm_hooks.h" ]; then
-            cat << 'EOF' > include/linux/lsm_hooks.h
-#ifndef _LINUX_LSM_HOOKS_H
-#define _LINUX_LSM_HOOKS_H
-#include <linux/security.h>
-#include <linux/version.h>
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 2, 0)
-struct security_hook_list {
-	struct list_head list;
-	struct list_head *head;
-	union {
-		void *hook;
-	} hook;
-	char *lsm;
-};
-#ifndef LSM_HOOK_INIT
-#define LSM_HOOK_INIT(HEAD, HOOK) { .hook = { .hook = HOOK } }
-#endif
-static inline void security_add_hooks(struct security_hook_list *hooks, int count, char *lsm) {}
-#endif
-
-#endif
-EOF
-          fi
+          mkdir -p include/linux
+          printf '%s\n' \
+            '#ifndef _LINUX_LSM_HOOKS_H' \
+            '#define _LINUX_LSM_HOOKS_H' \
+            '#include <linux/security.h>' \
+            '#include <linux/version.h>' \
+            '#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 2, 0)' \
+            'struct security_hook_list {' \
+            '    struct list_head list;' \
+            '    struct list_head *head;' \
+            '    union { void *hook; } hook;' \
+            '    char *lsm;' \
+            '};' \
+            '#ifndef LSM_HOOK_INIT' \
+            '#define LSM_HOOK_INIT(HEAD, HOOK) { .hook = { .hook = HOOK } }' \
+            '#endif' \
+            'static inline void security_add_hooks(struct security_hook_list *hooks, int count, char *lsm) {}' \
+            '#endif' \
+            '#endif' > include/linux/lsm_hooks.h
 
       - name: Configure and Compile Kernel
         env:
