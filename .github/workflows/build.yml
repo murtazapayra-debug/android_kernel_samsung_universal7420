@@ -6,11 +6,10 @@ on:
       defconfig:
         description: 'Kernel Defconfig'
         required: true
-        default: 'exynos7420-noblelte_eur_open_defconfig'
+        default: 'exynos7420-noblelte_defconfig'
   push:
     branches:
-      - master
-      - main
+      - murtazapayra_note5
 
 jobs:
   build:
@@ -46,7 +45,6 @@ jobs:
 
       - name: Setup BakaSU
         run: |
-          # Pulls BakaSU driver tree if not already committed
           if [ ! -d "drivers/kernelsu" ]; then
             curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh" | bash -s main
           fi
@@ -56,15 +54,14 @@ jobs:
           ARCH: arm64
           SUBARCH: arm64
           CROSS_COMPILE: ${{ github.workspace }}/toolchain-arm64/bin/aarch64-linux-android-
-          DEFCONFIG: ${{ github.event.inputs.defconfig || 'exynos7420-noblelte_eur_open_defconfig' }}
+          DEFCONFIG: ${{ github.event.inputs.defconfig || 'exynos7420-noblelte_defconfig' }}
         run: |
-          mkdir -p out
           make clean && make mrproper
           
-          # Generate defconfig
+          # Generate configuration
           make $DEFCONFIG
           
-          # Enforce BakaSU and Disable Knox/TIMA/DEFEX directly on .config
+          # Enforce BakaSU and disable Knox/TIMA/DEFEX
           scripts/config --enable CONFIG_KSU
           scripts/config --enable CONFIG_KSU_MANUAL_HOOK
           scripts/config --enable CONFIG_OVERLAY_FS
@@ -76,12 +73,12 @@ jobs:
           scripts/config --disable CONFIG_SECURITY_SELINUX_POLICYAUTH
           scripts/config --disable CONFIG_DM_VERITY
           
-          # Compile kernel image and device tree
+          # Build kernel image and device trees
           make -j$(nproc)
           
-          # Verify output
+          # Verify compilation output
           if [ ! -f "arch/arm64/boot/Image" ]; then
-            echo "Build failed: Image not found!"
+            echo "Build failed: arch/arm64/boot/Image not generated!"
             exit 1
           fi
 
@@ -90,19 +87,21 @@ jobs:
           git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 anykernel
           cd anykernel
           
-          # Configure AnyKernel3 script for Exynos 7420 / noblelte
+          # Configure AnyKernel3 script for Note 5 / noblelte
           sed -i 's/device.name1=.*/device.name1=noblelte/g' anykernel.sh
           sed -i 's/device.name2=.*/device.name2=noblelteeur/g' anykernel.sh
           sed -i 's/device.name3=.*/device.name3=universal7420/g' anykernel.sh
           sed -i 's/block=.*/block=\/dev\/block\/platform\/15570000.ufs\/by-name\/BOOT/g' anykernel.sh
           sed -i 's/is_slot_device=1/is_slot_device=0/g' anykernel.sh
 
-          # Append DTB if required, or copy pure Image
           cd ..
-          DTB_FILE=$(find arch/arm64/boot/dts/ -name "*noblelte*.dtb" | head -n 1)
-          if [ -f "$DTB_FILE" ]; then
+          # Find and append compiled device tree blob (DTB) to Image
+          DTB_FILE=$(find arch/arm64/boot/dts/ -name "*noblelte*.dtb" 2>/dev/null | head -n 1)
+          if [ -n "$DTB_FILE" ] && [ -f "$DTB_FILE" ]; then
+            echo "Appending DTB: $DTB_FILE"
             cat arch/arm64/boot/Image "$DTB_FILE" > anykernel/Image
           else
+            echo "No matching DTB found to append; using standalone Image"
             cp arch/arm64/boot/Image anykernel/Image
           fi
           
