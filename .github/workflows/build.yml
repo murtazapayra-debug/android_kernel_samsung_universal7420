@@ -1,0 +1,117 @@
+name: Build Note 5 Kernel with BakaSU
+
+on:
+  workflow_dispatch:
+    inputs:
+      defconfig:
+        description: 'Kernel Defconfig'
+        required: true
+        default: 'exynos7420-noblelte_eur_open_defconfig'
+  push:
+    branches:
+      - master
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Kernel Source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libssl-dev \
+            bc \
+            bison \
+            flex \
+            libncurses5-dev \
+            libtinfo5 \
+            libelf-dev \
+            zip \
+            tar \
+            curl \
+            git
+
+      - name: Download AOSP GCC 4.9 Toolchain
+        run: |
+          git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 -b android-10.0.0_r47 --depth=1 $GITHUB_WORKSPACE/toolchain-arm64
+
+      - name: Setup BakaSU
+        run: |
+          # Pulls BakaSU driver tree if not already committed
+          if [ ! -d "drivers/kernelsu" ]; then
+            curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh" | bash -s main
+          fi
+
+      - name: Configure and Compile Kernel
+        env:
+          ARCH: arm64
+          SUBARCH: arm64
+          CROSS_COMPILE: ${{ github.workspace }}/toolchain-arm64/bin/aarch64-linux-android-
+          DEFCONFIG: ${{ github.event.inputs.defconfig || 'exynos7420-noblelte_eur_open_defconfig' }}
+        run: |
+          mkdir -p out
+          make clean && make mrproper
+          
+          # Generate defconfig
+          make $DEFCONFIG
+          
+          # Enforce BakaSU and Disable Knox/TIMA/DEFEX directly on .config
+          scripts/config --enable CONFIG_KSU
+          scripts/config --enable CONFIG_KSU_MANUAL_HOOK
+          scripts/config --enable CONFIG_OVERLAY_FS
+          scripts/config --disable CONFIG_SECURITY_DEFEX
+          scripts/config --disable CONFIG_TIMA
+          scripts/config --disable CONFIG_TIMA_LKMAUTH
+          scripts/config --disable CONFIG_UH_RKP
+          scripts/config --disable CONFIG_KNOX_KAP
+          scripts/config --disable CONFIG_SECURITY_SELINUX_POLICYAUTH
+          scripts/config --disable CONFIG_DM_VERITY
+          
+          # Compile kernel image and device tree
+          make -j$(nproc)
+          
+          # Verify output
+          if [ ! -f "arch/arm64/boot/Image" ]; then
+            echo "Build failed: Image not found!"
+            exit 1
+          fi
+
+      - name: Package with AnyKernel3
+        run: |
+          git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 anykernel
+          cd anykernel
+          
+          # Configure AnyKernel3 script for Exynos 7420 / noblelte
+          sed -i 's/device.name1=.*/device.name1=noblelte/g' anykernel.sh
+          sed -i 's/device.name2=.*/device.name2=noblelteeur/g' anykernel.sh
+          sed -i 's/device.name3=.*/device.name3=universal7420/g' anykernel.sh
+          sed -i 's/block=.*/block=\/dev\/block\/platform\/15570000.ufs\/by-name\/BOOT/g' anykernel.sh
+          sed -i 's/is_slot_device=1/is_slot_device=0/g' anykernel.sh
+
+          # Append DTB if required, or copy pure Image
+          cd ..
+          DTB_FILE=$(find arch/arm64/boot/dts/ -name "*noblelte*.dtb" | head -n 1)
+          if [ -f "$DTB_FILE" ]; then
+            cat arch/arm64/boot/Image "$DTB_FILE" > anykernel/Image
+          else
+            cp arch/arm64/boot/Image anykernel/Image
+          fi
+          
+          cd anykernel
+          zip -r9 ../BakaSU-Kernel-Note5-universal7420.zip * -x .git README.md *placeholder
+
+      - name: Upload Flashable Kernel Zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: BakaSU-Kernel-Note5-universal7420
+          path: BakaSU-Kernel-Note5-universal7420.zip
+          retention-days: 7
