@@ -124,9 +124,9 @@ jobs:
           git -C anykernel checkout --detach 41f04bdb4ee30a44e429c2c1131d5e8bb32b15f1
           sed -i \
             -e 's/kernel.string=ExampleKernel by osm0sis @ xda-developers/kernel.string=BakaSU Note 5 universal7420/' \
-            -e 's/device.name1=maguro/device.name1=noblelte/' \
-            -e 's/device.name2=toro/device.name2=noblelteeur/' \
-            -e 's/device.name3=toroplus/device.name3=universal7420/' \
+            -e 's/device.name1=maguro/device.name1=nobleltedv/' \
+            -e 's/device.name2=toro/device.name2=/' \
+            -e 's/device.name3=toroplus/device.name3=/' \
             -e 's/device.name4=tuna/device.name4=/' \
             -e 's/^BLOCK=.*/BLOCK=\/dev\/block\/platform\/15570000.ufs\/by-name\/BOOT;/' \
             -e 's/^IS_SLOT_DEVICE=.*/IS_SLOT_DEVICE=0;/' anykernel/anykernel.sh
@@ -146,7 +146,7 @@ jobs:
           assert "init.tuna.rc" not in s and "fstab.tuna" not in s
           assert "backup_file init.rc" not in s and "replace_string init.rc" not in s
           assert "write_boot;" in s
-          assert "device.name1=noblelte" in s
+          assert "device.name1=nobleltedv" in s
           assert "BLOCK=/dev/block/platform/15570000.ufs/by-name/BOOT;" in s
           p.write_text(s)
           PY
