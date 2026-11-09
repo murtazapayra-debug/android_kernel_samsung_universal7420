@@ -32,6 +32,7 @@ jobs:
       - name: Checkout kernel source
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.ref }}
           fetch-depth: 1
 
       - name: Install build dependencies
@@ -87,7 +88,7 @@ jobs:
 
       - name: Package AnyKernel3 zip
         run: |
-          git clone https://github.com/osm0sis/AnyKernel3.git anykernel
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel
           git -C anykernel checkout --detach 41f04bdb4ee30a44e429c2c1131d5e8bb32b15f1
           sed -i \
             -e 's/device.name1=maguro/device.name1=noblelte/' \
