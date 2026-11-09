@@ -107,8 +107,13 @@ jobs:
         env:
           ARCH: arm64
           SUBARCH: arm64
-          CROSS_COMPILE: ${{ github.workspace }}/toolchain-arm64/bin/aarch64-linux-android-
+          CROSS_COMPILE: ccache ${{ github.workspace }}/toolchain-arm64/bin/aarch64-linux-android-
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+          CCACHE_COMPILERCHECK: content
+          CCACHE_MAXSIZE: 2G
+          CCACHE_COMPRESS: 1
         run: |
+          ccache --show-stats
           make -j"$(nproc)" Image dtbs
           test -s arch/arm64/boot/Image
           find arch/arm64/boot/dts -type f -name '*.dtb' -print
@@ -134,11 +139,13 @@ jobs:
           # Strip the template's unrelated init.rc tweaks as well as its
           # Galaxy Nexus init.tuna.rc/fstab.tuna edits.
           import re
-          s = re.sub(r"(?m)^# init\\.rc\\n.*?(?=^write_boot;)", "", s, flags=re.S)
+          s = re.sub(r"(?m)^# init\.rc\n.*?(?=^write_boot;)", "", s, flags=re.S)
           start = s.index("# init.tuna.rc")
           end = s.index("write_boot;", start)
           s = s[:start] + "# Note 5: retain the stock ramdisk and fstab unchanged." + chr(10) + chr(10) + s[end:]
           assert "init.tuna.rc" not in s and "fstab.tuna" not in s
+          assert "backup_file init.rc" not in s and "replace_string init.rc" not in s
+          assert "write_boot;" in s
           assert "device.name1=noblelte" in s
           assert "BLOCK=/dev/block/platform/15570000.ufs/by-name/BOOT;" in s
           p.write_text(s)
