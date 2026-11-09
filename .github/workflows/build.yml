@@ -81,7 +81,7 @@ jobs:
           SUBARCH: arm64
           CROSS_COMPILE: ${{ github.workspace }}/toolchain-arm64/bin/aarch64-linux-android-
         run: |
-          make -j"$(nproc)"
+          make -j"$(nproc)" Image dtbs
           test -s arch/arm64/boot/Image
           find arch/arm64/boot/dts -type f -name '*.dtb' -print
 
