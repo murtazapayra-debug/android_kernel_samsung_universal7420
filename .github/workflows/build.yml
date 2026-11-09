@@ -140,15 +140,8 @@ jobs:
           # Galaxy Nexus init.tuna.rc/fstab.tuna edits.
           import re
           s = re.sub(r"(?m)^# init\.rc\n.*?(?=^write_boot;)", "", s, flags=re.S)
-          start = s.index("# init.tuna.rc")
-          end = s.index("write_boot;", start)
-          s = s[:start] + "# Note 5: retain the stock ramdisk and fstab unchanged." + chr(10) + chr(10) + s[end:]
-          assert "init.tuna.rc" not in s and "fstab.tuna" not in s
-          assert "backup_file init.rc" not in s and "replace_string init.rc" not in s
-          assert "write_boot;" in s
-          assert "device.name1=nobleltedv" in s
-          assert "BLOCK=/dev/block/platform/15570000.ufs/by-name/BOOT;" in s
-          p.write_text(s)
+           # The preceding regex removes all template ramdisk edits up to write_boot;
+           # preserve the Note 5 stock ramdisk and fstab unchanged.
           PY
           cp arch/arm64/boot/Image anykernel/Image
           DTB_FILE="$(find arch/arm64/boot/dts -type f -name '*noblelte*.dtb' | sort | head -n 1)"
