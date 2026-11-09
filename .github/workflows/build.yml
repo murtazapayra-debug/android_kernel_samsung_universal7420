@@ -106,12 +106,27 @@ jobs:
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel
           git -C anykernel checkout --detach 41f04bdb4ee30a44e429c2c1131d5e8bb32b15f1
           sed -i \
+            -e 's/kernel.string=ExampleKernel by osm0sis @ xda-developers/kernel.string=BakaSU Note 5 universal7420/' \
             -e 's/device.name1=maguro/device.name1=noblelte/' \
             -e 's/device.name2=toro/device.name2=noblelteeur/' \
             -e 's/device.name3=toroplus/device.name3=universal7420/' \
             -e 's/device.name4=tuna/device.name4=/' \
             -e 's/^BLOCK=.*/BLOCK=\/dev\/block\/platform\/15570000.ufs\/by-name\/BOOT;/' \
             -e 's/^IS_SLOT_DEVICE=.*/IS_SLOT_DEVICE=0;/' anykernel/anykernel.sh
+          # The pinned AnyKernel template is for Galaxy Nexus (tuna). Remove
+          # its unrelated init.tuna.rc and fstab.tuna modifications entirely.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("anykernel/anykernel.sh")
+          s = p.read_text()
+          start = s.index("# init.tuna.rc")
+          end = s.index("write_boot;", start)
+          s = s[:start] + "# Note 5: retain the stock ramdisk and fstab unchanged.\\n\\n" + s[end:]
+          assert "init.tuna.rc" not in s and "fstab.tuna" not in s
+          assert "device.name1=noblelte" in s
+          assert "BLOCK=/dev/block/platform/15570000.ufs/by-name/BOOT;" in s
+          p.write_text(s)
+          PY
           cp arch/arm64/boot/Image anykernel/Image
           DTB_FILE="$(find arch/arm64/boot/dts -type f -name '*noblelte*.dtb' | sort | head -n 1)"
           if [ -n "$DTB_FILE" ]; then
