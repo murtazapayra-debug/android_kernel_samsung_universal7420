@@ -1629,6 +1629,14 @@ out:
 /*
  * sys_execve() executes a new program.
  */
+#ifdef CONFIG_KSU_MANUAL_HOOK
+extern int ksu_handle_execve_common(int *fd, const char **filename_ptr,
+				    void *argv, void *envp, int *flags);
+extern int ksu_handle_post_execve_common(int *fd, const char **filename_ptr,
+					 void *argv, void *envp, int *flags,
+					 int *retval);
+#endif
+
 static int do_execve_common(struct filename *filename,
 				struct user_arg_ptr argv,
 				struct user_arg_ptr envp)
@@ -1641,6 +1649,12 @@ static int do_execve_common(struct filename *filename,
 
 	if (IS_ERR(filename))
 		return PTR_ERR(filename);
+
+#ifdef CONFIG_KSU_MANUAL_HOOK
+	ksu_handle_execve_common((int *)AT_FDCWD,
+				 (const char **)&filename->name,
+				 &argv, &envp, 0);
+#endif
 
 	/*
 	 * We move the actual failure in case of RLIMIT_NPROC excess from
@@ -1722,6 +1736,11 @@ static int do_execve_common(struct filename *filename,
 	current->in_execve = 0;
 	acct_update_integrals(current);
 	free_bprm(bprm);
+#ifdef CONFIG_KSU_MANUAL_HOOK
+	ksu_handle_post_execve_common((int *)AT_FDCWD,
+				      (const char **)&filename->name,
+				      &argv, &envp, 0, &retval);
+#endif
 	putname(filename);
 	if (displaced)
 		put_files_struct(displaced);
@@ -1750,6 +1769,11 @@ out_files:
 	if (displaced)
 		reset_files_struct(displaced);
 out_ret:
+#ifdef CONFIG_KSU_MANUAL_HOOK
+	ksu_handle_post_execve_common((int *)AT_FDCWD,
+				      (const char **)&filename->name,
+				      &argv, &envp, 0, &retval);
+#endif
 	putname(filename);
 	return retval;
 }
