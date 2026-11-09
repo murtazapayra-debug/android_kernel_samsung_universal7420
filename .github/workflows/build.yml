@@ -73,6 +73,9 @@ jobs:
           scripts/config --enable CONFIG_KALLSYMS_ALL
           scripts/config --disable CONFIG_KSU_TRACEPOINT_HOOK
           scripts/config --disable CONFIG_KSU_SUSFS
+          # Samsung's optional booster needs a proprietary secos_booster.h
+          # which is absent from this source tree.
+          scripts/config --disable CONFIG_SECURE_OS_BOOSTER_API
           make olddefconfig
           grep -E '^(CONFIG_KSU=|CONFIG_KSU_MANUAL_HOOK=|CONFIG_KALLSYMS_ALL=)' .config
 
