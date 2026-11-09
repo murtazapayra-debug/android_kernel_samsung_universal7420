@@ -55,6 +55,18 @@ jobs:
           git clone https://github.com/Baka-SU/BakaSU.git KernelSU
           git -C KernelSU checkout --detach "$BAKASU_COMMIT"
           test "$(git -C KernelSU rev-parse HEAD)" = "$BAKASU_COMMIT"
+          # Linux 3.10 UAPI headers lack asm/fcntl.h needed by BakaSU's
+          # embedded preinit runner. Disable only that optional component;
+          # do not replace the missing runner with a fake binary.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("KernelSU/kernel/tools/code_generation/code_generation.mk")
+          s = p.read_text()
+          needle = "include $(KSU_SRC)/tools/code_generation/preinit_runner/preinit_runner.mk"
+          assert s.count(needle) == 1
+          s = s.replace(needle, "ccflags-y += -DKSU_NO_PREINIT\n# preinit runner disabled on this legacy Linux 3.10 kernel")
+          p.write_text(s)
+          PY
           ln -s ../KernelSU/kernel drivers/kernelsu
           test -f drivers/kernelsu/Kconfig
           echo "Using BakaSU $BAKASU_COMMIT"
