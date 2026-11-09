@@ -39,13 +39,21 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libssl-dev bc bison flex \
-            libncurses5-dev libtinfo5 libelf-dev zip git python3
+            libncurses5-dev libtinfo5 libelf-dev zip git python3 ccache
 
       - name: Install pinned AOSP GCC 4.9 toolchain
         run: |
           git clone --depth=1 -b android-10.0.0_r47 \
             https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 \
             "$GITHUB_WORKSPACE/toolchain-arm64"
+
+      - name: Restore compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ${{ runner.os }}-ccache-aarch64-gcc49-${{ hashFiles('arch/arm64/configs/exynos7420-noblelte_defconfig') }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-aarch64-gcc49-
 
       - name: Install pinned BakaSU source
         env:
@@ -75,8 +83,12 @@ jobs:
         env:
           ARCH: arm64
           SUBARCH: arm64
-          CROSS_COMPILE: ${{ github.workspace }}/toolchain-arm64/bin/aarch64-linux-android-
+          CROSS_COMPILE: ccache ${{ github.workspace }}/toolchain-arm64/bin/aarch64-linux-android-
           DEFCONFIG: ${{ github.event.inputs.defconfig || 'exynos7420-noblelte_defconfig' }}
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+          CCACHE_COMPILERCHECK: content
+          CCACHE_MAXSIZE: 2G
+          CCACHE_COMPRESS: 1
         run: |
           make mrproper
           make "$DEFCONFIG"
@@ -119,6 +131,10 @@ jobs:
           from pathlib import Path
           p = Path("anykernel/anykernel.sh")
           s = p.read_text()
+          # Strip the template's unrelated init.rc tweaks as well as its
+          # Galaxy Nexus init.tuna.rc/fstab.tuna edits.
+          import re
+          s = re.sub(r"(?m)^# init\\.rc\\n.*?(?=^write_boot;)", "", s, flags=re.S)
           start = s.index("# init.tuna.rc")
           end = s.index("write_boot;", start)
           s = s[:start] + "# Note 5: retain the stock ramdisk and fstab unchanged." + chr(10) + chr(10) + s[end:]
