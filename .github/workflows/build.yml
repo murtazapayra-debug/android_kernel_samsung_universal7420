@@ -121,7 +121,7 @@ jobs:
           s = p.read_text()
           start = s.index("# init.tuna.rc")
           end = s.index("write_boot;", start)
-          s = s[:start] + "# Note 5: retain the stock ramdisk and fstab unchanged.\\n\\n" + s[end:]
+          s = s[:start] + "# Note 5: retain the stock ramdisk and fstab unchanged." + chr(10) + chr(10) + s[end:]
           assert "init.tuna.rc" not in s and "fstab.tuna" not in s
           assert "device.name1=noblelte" in s
           assert "BLOCK=/dev/block/platform/15570000.ufs/by-name/BOOT;" in s
